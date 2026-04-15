@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.jira-mcp.proxy</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>@@PYTHON_PATH@@</string>
+        <string>@@PROXY_SCRIPT_PATH@@</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>ENV_FILE</key>
+        <string>@@ENV_FILE_PATH@@</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>@@LOG_DIR@@/jira-proxy.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>@@LOG_DIR@@/jira-proxy.err</string>
+</dict>
+</plist>

@@ -26,6 +26,14 @@ COOKIE_FILE_RESOLVED := $(subst $$(HOME),$(HOME),$(COOKIE_FILE))
 # Resolve NATIVE_HOST_PATH
 NATIVE_HOST_PATH_RESOLVED := $(CURDIR)/native-host/jira_cookie_bridge.py
 
+# Proxy settings
+PROXY_PORT       ?= 9778
+PROXY_PLIST_LABEL := com.jira-mcp.proxy
+PROXY_PLIST_DIR   := $(HOME)/Library/LaunchAgents
+PROXY_PLIST       := $(PROXY_PLIST_DIR)/$(PROXY_PLIST_LABEL).plist
+PROXY_LOG_DIR     := $(HOME)/Library/Logs/jira-mcp
+PYTHON_PATH       := $(CURDIR)/.venv/bin/python3
+
 # Directories
 EXT_SRC     := firefox-extension
 EXT_BUILD   := build/extension
@@ -49,7 +57,8 @@ TOKENS = \
 # Targets
 # =============================================================================
 
-.PHONY: all configure build install uninstall clean xpi check-env
+.PHONY: all configure build install uninstall clean xpi check-env \
+       proxy proxy-install proxy-uninstall proxy-start proxy-stop proxy-restart proxy-status proxy-logs
 
 all: configure build install xpi
 	@echo ""
@@ -115,6 +124,51 @@ clean:
 	rm -rf $(BUILD_DIR)
 	@echo "✓ Build artifacts removed."
 
+# =============================================================================
+# Proxy targets
+# =============================================================================
+
+## proxy: Run the HTTP proxy in the foreground (for development)
+proxy:
+	$(PYTHON_PATH) proxy.py
+
+## proxy-install: Install launchd plist for the HTTP proxy
+proxy-install:
+	mkdir -p "$(PROXY_LOG_DIR)"
+	mkdir -p "$(PROXY_PLIST_DIR)"
+	sed -e 's|@@PYTHON_PATH@@|$(PYTHON_PATH)|g' \
+	    -e 's|@@PROXY_SCRIPT_PATH@@|$(CURDIR)/proxy.py|g' \
+	    -e 's|@@ENV_FILE_PATH@@|$(CURDIR)/.env.local|g' \
+	    -e 's|@@LOG_DIR@@|$(PROXY_LOG_DIR)|g' \
+	    launchd/com.jira-mcp.proxy.plist.template > "$(PROXY_PLIST)"
+	@echo "✓ Plist installed at $(PROXY_PLIST)"
+
+## proxy-start: Load and start the proxy service
+proxy-start: proxy-install
+	launchctl load "$(PROXY_PLIST)"
+	@echo "✓ Proxy started on http://localhost:$(PROXY_PORT)"
+
+## proxy-stop: Stop and unload the proxy service
+proxy-stop:
+	-launchctl unload "$(PROXY_PLIST)" 2>/dev/null
+	@echo "✓ Proxy stopped"
+
+## proxy-restart: Restart the proxy service
+proxy-restart: proxy-stop proxy-start
+
+## proxy-uninstall: Remove the launchd service
+proxy-uninstall: proxy-stop
+	rm -f "$(PROXY_PLIST)"
+	@echo "✓ Proxy plist removed"
+
+## proxy-status: Check if the proxy is running
+proxy-status:
+	@launchctl list 2>/dev/null | grep $(PROXY_PLIST_LABEL) && echo "✓ Proxy is running" || echo "✗ Proxy is not running"
+
+## proxy-logs: Tail the proxy logs
+proxy-logs:
+	tail -f "$(PROXY_LOG_DIR)/jira-proxy.log" "$(PROXY_LOG_DIR)/jira-proxy.err"
+
 ## check-env: Print resolved configuration (useful for debugging)
 check-env:
 	@echo "JIRA_URL              = $(JIRA_URL)"
@@ -127,3 +181,5 @@ check-env:
 	@echo "NATIVE_HOST_NAME      = $(NATIVE_HOST_NAME)"
 	@echo "NATIVE_HOST_PATH      = $(NATIVE_HOST_PATH_RESOLVED)"
 	@echo "NATIVE_MANIFEST       = $(NATIVE_MANIFEST)"
+	@echo "PROXY_PORT            = $(PROXY_PORT)"
+	@echo "PROXY_SSL_VERIFY      = $(PROXY_SSL_VERIFY)"
