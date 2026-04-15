@@ -61,21 +61,16 @@ all: configure build install xpi
 	@echo ""
 
 ## configure: Create .env.local if it doesn't exist (prompts for JIRA_URL)
-configure:
-	@if [ ! -f .env.local ]; then \
-		read -p "Enter your Jira URL (e.g. https://jira.example.com): " jira_url; \
-		sed "s|https://jira.example.com|$$jira_url|g" .env.local.example > .env.local; \
-		echo "✓ Created .env.local with JIRA_URL=$$jira_url"; \
-	else \
-		echo "✓ .env.local already exists"; \
-	fi
+configure: .env.local
+
+.env.local:
+	@read -p "Enter your Jira URL (e.g. https://jira.example.com): " jira_url; \
+	sed "s|https://jira.example.com|$$jira_url|g" .env.local.example > .env.local; \
+	echo "✓ Created .env.local with JIRA_URL=$$jira_url"
 
 ## build: Generate extension files from templates
 build: $(EXT_BUILD)/manifest.json $(EXT_BUILD)/background.js $(EXT_BUILD)/icons/icon-48.svg
 	@echo "✓ Extension built in $(EXT_BUILD)/"
-
-$(BUILD_DIR):
-	mkdir -p $(BUILD_DIR)
 
 $(EXT_BUILD):
 	mkdir -p $(EXT_BUILD)/icons
@@ -110,7 +105,7 @@ uninstall:
 	@echo "✓ Native host manifest removed."
 
 ## xpi: Package the extension as an .xpi file (just a zip)
-xpi: build | $(BUILD_DIR)
+xpi: build
 	cd $(EXT_BUILD) && zip -r -FS $(CURDIR)/$(BUILD_DIR)/jira-cookie-bridge.xpi . -x '*.DS_Store'
 	@echo "✓ Extension packaged: $(BUILD_DIR)/jira-cookie-bridge.xpi"
 
