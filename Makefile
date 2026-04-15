@@ -32,7 +32,8 @@ PROXY_PLIST_LABEL := com.jira-mcp.proxy
 PROXY_PLIST_DIR   := $(HOME)/Library/LaunchAgents
 PROXY_PLIST       := $(PROXY_PLIST_DIR)/$(PROXY_PLIST_LABEL).plist
 PROXY_LOG_DIR     := $(HOME)/Library/Logs/jira-mcp
-PYTHON_PATH       := $(CURDIR)/.venv/bin/python3
+# Use local .venv if it exists (source checkout), otherwise libexec venv (brew)
+PYTHON_PATH       := $(shell test -x $(CURDIR)/.venv/bin/python3 && echo $(CURDIR)/.venv/bin/python3 || echo $(CURDIR)/bin/python3)
 
 # Directories
 EXT_SRC     := firefox-extension
