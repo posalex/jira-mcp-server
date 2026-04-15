@@ -1,0 +1,22 @@
+# Environment (contains local paths)
+.env.local
+
+# Build artifacts
+build/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Cookie file (session credentials)
+.jira-mcp-cookies.json
+
+# MCP config (contains local paths)
+.mcp.json
+
+# Claude Code
+.claude/
+
+# macOS
+.DS_Store

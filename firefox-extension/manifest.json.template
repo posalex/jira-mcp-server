@@ -1,0 +1,28 @@
+{
+  "manifest_version": 2,
+  "name": "Jira Cookie Bridge",
+  "version": "1.0.0",
+  "description": "Automatically syncs Jira session cookies to the Jira MCP server",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "@@EXTENSION_ID@@",
+      "strict_min_version": "109.0"
+    }
+  },
+
+  "permissions": [
+    "cookies",
+    "nativeMessaging",
+    "webNavigation",
+    "https://@@JIRA_DOMAIN@@/*"
+  ],
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "icons": {
+    "48": "icons/icon-48.svg"
+  }
+}

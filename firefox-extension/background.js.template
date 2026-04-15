@@ -1,0 +1,100 @@
+/**
+ * Jira Cookie Bridge — Firefox Background Script
+ *
+ * Watches for navigations to the configured Jira domain, reads the session
+ * cookies (including httpOnly ones), and forwards them to a native messaging
+ * host that writes them to the shared cookie file.
+ *
+ * Placeholders (@@…@@) are replaced by the Makefile at build time.
+ */
+
+const JIRA_DOMAIN = "@@JIRA_DOMAIN@@";
+const COOKIE_SESSION_NAME = "@@COOKIE_SESSION_NAME@@";
+const COOKIE_XSRF_NAME = "@@COOKIE_XSRF_NAME@@";
+const NATIVE_HOST_NAME = "@@NATIVE_HOST_NAME@@";
+const JIRA_URL = "@@JIRA_URL@@";
+
+// Debounce: don't send more than once every N ms per cookie change
+const DEBOUNCE_MS = 3000;
+let lastSentAt = 0;
+
+/**
+ * Read a cookie by name from the Jira domain.
+ * The cookies API can access httpOnly cookies — that's the whole point.
+ */
+async function getCookie(name) {
+  const cookie = await browser.cookies.get({
+    url: JIRA_URL,
+    name: name,
+  });
+  return cookie ? cookie.value : null;
+}
+
+/**
+ * Collect relevant cookies and send them to the native host.
+ */
+async function syncCookies(reason) {
+  const now = Date.now();
+  if (now - lastSentAt < DEBOUNCE_MS) return;
+  lastSentAt = now;
+
+  const sessionCookie = await getCookie(COOKIE_SESSION_NAME);
+  const xsrfCookie = await getCookie(COOKIE_XSRF_NAME);
+
+  if (!sessionCookie) {
+    console.log("[Jira Cookie Bridge] No session cookie found — skipping.");
+    return;
+  }
+
+  const cookies = {};
+  cookies[COOKIE_SESSION_NAME] = sessionCookie;
+  if (xsrfCookie) {
+    cookies[COOKIE_XSRF_NAME] = xsrfCookie;
+  }
+
+  try {
+    const response = await browser.runtime.sendNativeMessage(NATIVE_HOST_NAME, {
+      action: "update",
+      cookies: cookies,
+    });
+    if (response && response.ok) {
+      console.log(`[Jira Cookie Bridge] Cookies synced (${reason}):`, response.saved);
+    } else {
+      console.warn("[Jira Cookie Bridge] Native host error:", response);
+    }
+  } catch (err) {
+    console.error("[Jira Cookie Bridge] Failed to send to native host:", err);
+  }
+}
+
+// ---- Triggers -----------------------------------------------------------
+
+// 1. When the user navigates to Jira (page fully loaded)
+browser.webNavigation.onCompleted.addListener(
+  (details) => {
+    // Only react to top-level frames, not iframes
+    if (details.frameId === 0) {
+      syncCookies("navigation");
+    }
+  },
+  { url: [{ hostEquals: JIRA_DOMAIN }] }
+);
+
+// 2. When Jira cookies change (e.g. session refresh)
+browser.cookies.onChanged.addListener((changeInfo) => {
+  const { cookie, removed } = changeInfo;
+  if (removed) return;
+  if (cookie.domain.includes(JIRA_DOMAIN)) {
+    if (
+      cookie.name === COOKIE_SESSION_NAME ||
+      cookie.name === COOKIE_XSRF_NAME
+    ) {
+      syncCookies("cookie-change");
+    }
+  }
+});
+
+// 3. On extension startup (in case cookies already exist)
+syncCookies("startup");
+
+console.log(`[Jira Cookie Bridge] Watching ${JIRA_DOMAIN} for cookie changes.`);
