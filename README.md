@@ -50,7 +50,16 @@ No running daemon, no localhost HTTP server dependency — the cookie file is th
 - **Python 3** (for the native messaging host — no pip dependencies)
 - **GNU Make**
 
-## Quick Start
+## Install via Homebrew
+
+```bash
+brew tap posalex/tap
+brew install jira-mcp-server
+```
+
+Then follow the post-install instructions printed by `brew info jira-mcp-server`.
+
+## Quick Start (from source)
 
 ### 1. Configure
 
