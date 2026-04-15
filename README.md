@@ -66,9 +66,8 @@ Then follow the post-install instructions printed by `brew info jira-mcp-server`
 Edit `.env.local` to match your environment:
 
 ```bash
-# .env.local — at minimum, check these:
+# .env.local — at minimum, set this:
 JIRA_URL=https://jira.example.com
-JIRA_DOMAIN=jira.example.com
 ```
 
 The defaults should work for most setups. Run `make check-env` to verify:
@@ -169,7 +168,7 @@ Verify `"path"` points to the actual location of `jira_cookie_bridge.py`.
 
 **Cookies not syncing**
 - Open the Browser Console (`Cmd+Shift+J`) and check for `[Jira Cookie Bridge]` log messages.
-- Make sure you're on the correct domain (check `JIRA_DOMAIN` in `.env.local`).
+- Make sure you're on the correct domain (derived from `JIRA_URL` in `.env.local`).
 - Verify the extension is loaded at `about:debugging#/runtime/this-firefox`.
 
 **"Permission denied" on the native host script**

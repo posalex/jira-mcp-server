@@ -14,8 +14,11 @@
 
 SHELL := /bin/bash
 
-# Load configuration from .env.local
-include .env.local
+# Load configuration from .env.local (optional — `make configure` creates it)
+-include .env.local
+
+# Derive JIRA_DOMAIN from JIRA_URL (strip scheme)
+JIRA_DOMAIN := $(shell echo '$(JIRA_URL)' | sed -E 's|^https?://||')
 
 # Resolve COOKIE_FILE (expand $(HOME) to actual home dir)
 COOKIE_FILE_RESOLVED := $(subst $$(HOME),$(HOME),$(COOKIE_FILE))
@@ -46,9 +49,9 @@ TOKENS = \
 # Targets
 # =============================================================================
 
-.PHONY: all build install uninstall clean xpi check-env
+.PHONY: all configure build install uninstall clean xpi check-env
 
-all: build install xpi
+all: configure build install xpi
 	@echo ""
 	@echo "✓ Done! Next steps:"
 	@echo "  1. Open Firefox → about:debugging → This Firefox → Load Temporary Add-on"
@@ -56,6 +59,16 @@ all: build install xpi
 	@echo "  2. Or install the .xpi: $(CURDIR)/$(BUILD_DIR)/jira-cookie-bridge.xpi"
 	@echo "  3. Visit $(JIRA_URL) — cookies will sync automatically."
 	@echo ""
+
+## configure: Create .env.local if it doesn't exist (prompts for JIRA_URL)
+configure:
+	@if [ ! -f .env.local ]; then \
+		read -p "Enter your Jira URL (e.g. https://jira.example.com): " jira_url; \
+		sed "s|https://jira.example.com|$$jira_url|g" .env.local.example > .env.local; \
+		echo "✓ Created .env.local with JIRA_URL=$$jira_url"; \
+	else \
+		echo "✓ .env.local already exists"; \
+	fi
 
 ## build: Generate extension files from templates
 build: $(EXT_BUILD)/manifest.json $(EXT_BUILD)/background.js $(EXT_BUILD)/icons/icon-48.svg
