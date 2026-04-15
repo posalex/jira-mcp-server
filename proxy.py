@@ -90,13 +90,12 @@ def get_cookie_header() -> str:
 # Summary sanitizer — strip chars invalid in git branch names
 # ---------------------------------------------------------------------------
 
-# Characters not allowed in git refs: space ~ ^ : ? * [ ] \ " < > | @ { }
-_INVALID_BRANCH_CHARS = re.compile(r'[~^:?*\[\]\\\"<>|@{}\']+')
+_NON_BRANCH_SAFE = re.compile(r'[^A-Za-z0-9 _-]+')
 
 
 def sanitize_summary(text: str) -> str:
     """Strip characters that are invalid in git branch names."""
-    text = _INVALID_BRANCH_CHARS.sub(" ", text)
+    text = _NON_BRANCH_SAFE.sub(" ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
