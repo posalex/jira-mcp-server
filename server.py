@@ -28,7 +28,8 @@ from fastmcp import FastMCP
 
 def _load_env_local():
     """Read key=value pairs from .env.local (ignoring comments and Makefile syntax)."""
-    env_file = Path(__file__).parent / ".env.local"
+    # Check ENV_FILE env var first (set by brew wrapper), then fall back to script dir
+    env_file = Path(os.environ["ENV_FILE"]) if "ENV_FILE" in os.environ else Path(__file__).parent / ".env.local"
     if not env_file.exists():
         return
     for line in env_file.read_text().splitlines():
