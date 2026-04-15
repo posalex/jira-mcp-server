@@ -57,7 +57,7 @@ all: configure build install xpi
 	@echo "  1. Install the .xpi in Firefox Developer Edition:"
 	@echo "     about:config → set xpinstall.signatures.required to false"
 	@echo "     about:addons → gear icon → Install Add-on From File..."
-	@echo "     Select: $(CURDIR)/$(BUILD_DIR)/jira-cookie-bridge.xpi"
+	@echo "     Select: $$(pwd -L)/$(BUILD_DIR)/jira-cookie-bridge.xpi"
 	@echo "  2. Visit $(JIRA_URL) — cookies will sync automatically."
 	@echo ""
 
