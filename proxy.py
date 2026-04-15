@@ -91,7 +91,7 @@ def get_cookie_header() -> str:
 # ---------------------------------------------------------------------------
 
 # Characters not allowed in git refs: space ~ ^ : ? * [ ] \ " < > | @ { }
-_INVALID_BRANCH_CHARS = re.compile(r'[~^:?*\[\]\\\"<>|@{}]+')
+_INVALID_BRANCH_CHARS = re.compile(r'[~^:?*\[\]\\\"<>|@{}\']+')
 
 
 def sanitize_summary(text: str) -> str:
