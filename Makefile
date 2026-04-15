@@ -54,10 +54,11 @@ TOKENS = \
 all: configure build install xpi
 	@echo ""
 	@echo "✓ Done! Next steps:"
-	@echo "  1. Open Firefox → about:debugging → This Firefox → Load Temporary Add-on"
-	@echo "     Select: $(CURDIR)/$(EXT_BUILD)/manifest.json"
-	@echo "  2. Or install the .xpi: $(CURDIR)/$(BUILD_DIR)/jira-cookie-bridge.xpi"
-	@echo "  3. Visit $(JIRA_URL) — cookies will sync automatically."
+	@echo "  1. Install the .xpi in Firefox Developer Edition:"
+	@echo "     about:config → set xpinstall.signatures.required to false"
+	@echo "     about:addons → gear icon → Install Add-on From File..."
+	@echo "     Select: $(BUILD_DIR)/jira-cookie-bridge.xpi"
+	@echo "  2. Visit $(JIRA_URL) — cookies will sync automatically."
 	@echo ""
 
 ## configure: Create .env.local if it doesn't exist (prompts for JIRA_URL)
