@@ -13,6 +13,7 @@ cookie-based auth support.
 import json
 import logging
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -52,6 +53,8 @@ JIRA_URL = os.environ.get("JIRA_URL", "https://jira.example.com")
 PROXY_PORT = int(os.environ.get("PROXY_PORT", "9778"))
 COOKIE_FILE = Path(os.environ.get("COOKIE_FILE", Path.home() / ".jira-mcp-cookies.json"))
 SSL_VERIFY = os.environ.get("PROXY_SSL_VERIFY", "true").lower() != "false"
+SANITIZE_SUMMARIES = os.environ.get("PROXY_SANITIZE_SUMMARIES", "true").lower() != "false"
+LOG_RESPONSES = os.environ.get("PROXY_LOG_RESPONSES", "false").lower() == "true"
 WEB_PORT = int(os.environ.get("WEB_PORT", "9777"))
 
 # ---------------------------------------------------------------------------
@@ -82,6 +85,50 @@ def load_cookies() -> dict:
 
 def get_cookie_header() -> str:
     return "; ".join(f"{k}={v}" for k, v in load_cookies().items())
+
+# ---------------------------------------------------------------------------
+# Summary sanitizer — strip chars invalid in git branch names
+# ---------------------------------------------------------------------------
+
+# Characters not allowed in git refs: space ~ ^ : ? * [ ] \ " < > | @ { }
+_INVALID_BRANCH_CHARS = re.compile(r'[~^:?*\[\]\\\"<>|@{}]+')
+
+
+def sanitize_summary(text: str) -> str:
+    """Strip characters that are invalid in git branch names."""
+    text = _INVALID_BRANCH_CHARS.sub(" ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def sanitize_response_body(body: bytes, content_type: str) -> bytes:
+    """Sanitize summary fields in Jira JSON responses."""
+    if not SANITIZE_SUMMARIES:
+        return body
+    if "application/json" not in content_type:
+        return body
+    try:
+        data = json.loads(body)
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return body
+
+    modified = False
+
+    # Single issue: /rest/api/2/issue/KEY
+    if isinstance(data, dict) and "fields" in data and "summary" in data.get("fields", {}):
+        data["fields"]["summary"] = sanitize_summary(data["fields"]["summary"])
+        modified = True
+
+    # Search results: /rest/api/2/search
+    if isinstance(data, dict) and "issues" in data:
+        for issue in data["issues"]:
+            fields = issue.get("fields", {})
+            if "summary" in fields:
+                fields["summary"] = sanitize_summary(fields["summary"])
+                modified = True
+
+    return json.dumps(data, ensure_ascii=False).encode() if modified else body
+
 
 # ---------------------------------------------------------------------------
 # Proxy handler
@@ -150,10 +197,17 @@ async def proxy_handler(request: Request) -> Response:
     else:
         log.info("%s %s -> %d (%.2fs)", method, path, resp.status_code, elapsed)
 
-    # Return response as-is, stripping hop-by-hop headers
+    if LOG_RESPONSES:
+        log.info("RESPONSE: %s", resp.text[:4000] if resp.text else "(empty)")
+
+    # Sanitize summaries for IDE branch name compatibility
+    content_type = resp.headers.get("content-type", "")
+    response_body = sanitize_response_body(resp.content, content_type)
+
+    # Return response, stripping hop-by-hop headers
     resp_headers = {k: v for k, v in resp.headers.items() if k.lower() not in HOP_BY_HOP}
 
-    return Response(content=resp.content, status_code=resp.status_code, headers=resp_headers)
+    return Response(content=response_body, status_code=resp.status_code, headers=resp_headers)
 
 # ---------------------------------------------------------------------------
 # Health check
