@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
-  "name": "Jira Cookie Bridge",
-  "version": "1.0.0",
+  "name": "Jira Cookie Bridge @@VERSION@@",
+  "version": "@@VERSION@@",
   "description": "Automatically syncs Jira session cookies to the Jira MCP server",
 
   "browser_specific_settings": {

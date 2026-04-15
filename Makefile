@@ -52,7 +52,8 @@ TOKENS = \
 	-e 's|@@JIRA_URL@@|$(JIRA_URL)|g' \
 	-e 's|@@COOKIE_SESSION_NAME@@|$(COOKIE_SESSION_NAME)|g' \
 	-e 's|@@COOKIE_XSRF_NAME@@|$(COOKIE_XSRF_NAME)|g' \
-	-e 's|@@NATIVE_HOST_NAME@@|$(NATIVE_HOST_NAME)|g'
+	-e 's|@@NATIVE_HOST_NAME@@|$(NATIVE_HOST_NAME)|g' \
+	-e 's|@@VERSION@@|$(VERSION)|g'
 
 # =============================================================================
 # Targets
