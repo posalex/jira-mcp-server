@@ -180,7 +180,7 @@ async def browse_redirect(request: Request) -> Response:
     issue_key = request.path_params["issue_key"]
     location = f"{JIRA_URL}/browse/{issue_key}"
     log.info("Redirect /browse/%s -> %s", issue_key, location)
-    return Response(status_code=302, headers={"location": location})
+    return Response(status_code=301, headers={"location": location})
 
 # ---------------------------------------------------------------------------
 # App
