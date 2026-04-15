@@ -173,11 +173,22 @@ async def health(request: Request) -> Response:
     )
 
 # ---------------------------------------------------------------------------
+# Browser redirect — /browse/KEY-123 → real Jira URL
+# ---------------------------------------------------------------------------
+
+async def browse_redirect(request: Request) -> Response:
+    issue_key = request.path_params["issue_key"]
+    location = f"{JIRA_URL}/browse/{issue_key}"
+    log.info("Redirect /browse/%s -> %s", issue_key, location)
+    return Response(status_code=302, headers={"location": location})
+
+# ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 
 app = Starlette(routes=[
     Route("/_proxy/health", health, methods=["GET"]),
+    Route("/browse/{issue_key}", browse_redirect, methods=["GET"]),
     Route("/{path:path}", proxy_handler, methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]),
 ])
 
