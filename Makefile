@@ -23,8 +23,8 @@ JIRA_DOMAIN := $(shell echo '$(JIRA_URL)' | sed -E 's|^https?://||')
 # Resolve COOKIE_FILE (expand $(HOME) to actual home dir)
 COOKIE_FILE_RESOLVED := $(subst $$(HOME),$(HOME),$(COOKIE_FILE))
 
-# Resolve NATIVE_HOST_PATH
-NATIVE_HOST_PATH_RESOLVED := $(CURDIR)/native-host/jira_cookie_bridge.py
+# Resolve NATIVE_HOST_PATH (use pwd -L to preserve opt symlink in brew installs)
+NATIVE_HOST_PATH_RESOLVED := $(shell pwd -L)/native-host/jira_cookie_bridge.py
 
 # Proxy settings
 PROXY_PORT       ?= 9778
