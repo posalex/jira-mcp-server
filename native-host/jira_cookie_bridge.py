@@ -116,12 +116,31 @@ def main():
                 if value:
                     cookies[key] = value
             # Add metadata
-            cookies["_updated_at"] = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(timezone.utc)
+            cookies["_updated_at"] = now.isoformat()
             if expiry:
-                cookies["_expiry"] = {
-                    k: datetime.fromtimestamp(v, tz=timezone.utc).isoformat()
-                    for k, v in expiry.items()
-                }
+                exp = {}
+                for k, v in expiry.items():
+                    expires_at = datetime.fromtimestamp(v, tz=timezone.utc)
+                    remaining = expires_at - now
+                    total_secs = int(remaining.total_seconds())
+                    if total_secs > 0:
+                        days, r = divmod(total_secs, 86400)
+                        hours, r = divmod(r, 3600)
+                        minutes, secs = divmod(r, 60)
+                        parts = []
+                        if days: parts.append(f"{days}d")
+                        if hours: parts.append(f"{hours}h")
+                        if minutes: parts.append(f"{minutes}m")
+                        parts.append(f"{secs}s")
+                        ttl = " ".join(parts)
+                    else:
+                        ttl = "expired"
+                    exp[k] = {
+                        "expires_at": expires_at.isoformat(),
+                        "ttl": ttl,
+                    }
+                cookies["_expiry"] = exp
             save_cookies(cookies)
             send_message({"ok": True, "saved": list(incoming.keys())})
 
