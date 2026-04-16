@@ -27,7 +27,7 @@ async function getCookie(name) {
     url: JIRA_URL,
     name: name,
   });
-  return cookie ? cookie.value : null;
+  return cookie || null;
 }
 
 /**
@@ -47,15 +47,23 @@ async function syncCookies(reason) {
   }
 
   const cookies = {};
-  cookies[COOKIE_SESSION_NAME] = sessionCookie;
+  const expiry = {};
+  cookies[COOKIE_SESSION_NAME] = sessionCookie.value;
+  if (sessionCookie.expirationDate) {
+    expiry[COOKIE_SESSION_NAME] = sessionCookie.expirationDate;
+  }
   if (xsrfCookie) {
-    cookies[COOKIE_XSRF_NAME] = xsrfCookie;
+    cookies[COOKIE_XSRF_NAME] = xsrfCookie.value;
+    if (xsrfCookie.expirationDate) {
+      expiry[COOKIE_XSRF_NAME] = xsrfCookie.expirationDate;
+    }
   }
 
   try {
     const response = await browser.runtime.sendNativeMessage(NATIVE_HOST_NAME, {
       action: "update",
       cookies: cookies,
+      expiry: expiry,
     });
     if (response && response.ok) {
       console.log(`[Jira Cookie Bridge] Cookies synced (${reason}):`, response.saved);

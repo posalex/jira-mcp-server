@@ -84,7 +84,7 @@ def load_cookies() -> dict:
 
 
 def get_cookie_header() -> str:
-    return "; ".join(f"{k}={v}" for k, v in load_cookies().items())
+    return "; ".join(f"{k}={v}" for k, v in load_cookies().items() if not k.startswith("_"))
 
 # ---------------------------------------------------------------------------
 # Summary sanitizer — strip chars invalid in git branch names

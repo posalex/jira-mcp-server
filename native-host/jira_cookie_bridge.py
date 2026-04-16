@@ -16,6 +16,7 @@ import json
 import os
 import struct
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 # ---------------------------------------------------------------------------
@@ -109,10 +110,18 @@ def main():
         if action == "update":
             cookies = load_cookies()
             incoming = msg.get("cookies", {})
+            expiry = msg.get("expiry", {})
             # Merge: only overwrite keys that have non-empty values
             for key, value in incoming.items():
                 if value:
                     cookies[key] = value
+            # Add metadata
+            cookies["_updated_at"] = datetime.now(timezone.utc).isoformat()
+            if expiry:
+                cookies["_expiry"] = {
+                    k: datetime.fromtimestamp(v, tz=timezone.utc).isoformat()
+                    for k, v in expiry.items()
+                }
             save_cookies(cookies)
             send_message({"ok": True, "saved": list(incoming.keys())})
 

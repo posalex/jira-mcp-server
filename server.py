@@ -78,7 +78,7 @@ def save_cookies(cookies: dict):
 
 def get_cookie_header() -> str:
     cookies = load_cookies()
-    parts = [f"{k}={v}" for k, v in cookies.items()]
+    parts = [f"{k}={v}" for k, v in cookies.items() if not k.startswith("_")]
     return "; ".join(parts)
 
 
