@@ -217,18 +217,32 @@ jira-mcp-server/
 
 ## Troubleshooting
 
+### Firefox Extension
+
 **"Error: No such native application"**
 The native messaging host manifest isn't installed or has the wrong path. Run:
 ```bash
 make install
 cat ~/Library/Application\ Support/Mozilla/NativeMessagingHosts/jira.cookie.bridge.json
 ```
-Verify `"path"` points to the actual location of `jira_cookie_bridge.py`.
+Verify `"path"` points to the actual location of `jira_cookie_bridge.py`. If you
+installed via Homebrew, the path should use `/opt/homebrew/opt/jira-mcp-server/libexec/...`
+(not a versioned Cellar path). Re-run `make -C /opt/homebrew/opt/jira-mcp-server/libexec install`
+to fix it.
 
 **Cookies not syncing**
 - Open the Browser Console (`Cmd+Shift+J`) and check for `[Jira Cookie Bridge]` log messages.
 - Make sure you're on the correct domain (derived from `JIRA_URL` in `.env.local`).
 - Verify the extension is loaded at `about:debugging#/runtime/this-firefox`.
+- Check `~/.jira-mcp-cookies.json` — the `_updated_at` field shows when cookies were last synced.
+
+**Cookies stale after `brew upgrade`**
+The native messaging host manifest may point to an old Cellar path that no longer exists.
+Fix it by re-running:
+```bash
+make -C /opt/homebrew/opt/jira-mcp-server/libexec install
+```
+Then reload the extension in Firefox (`about:addons` -> remove -> reinstall from `.xpi`).
 
 **"Permission denied" on the native host script**
 ```bash
@@ -242,11 +256,88 @@ echo -ne '\x0d\x00\x00\x00{"action":"status"}' | python3 native-host/jira_cookie
 ```
 You should get a JSON response with `"ok": true`.
 
+### HTTP Proxy
+
+**PhpStorm: "Login failed. Check your credentials."**
+1. Check if the proxy is running: `curl http://localhost:9778/_proxy/health`
+2. If not running, start it: `jira-proxy` or `make proxy-start`
+3. If running but returning 401, your session cookies have expired. Visit your Jira
+   instance in Firefox to refresh them. Check `~/.jira-mcp-cookies.json` for the
+   `_updated_at` timestamp and `_expiry` TTL.
+
+**Proxy not starting (port in use)**
+Another process is using port 9778. Either stop it or change `PROXY_PORT` in `.env.local`.
+```bash
+lsof -i :9778
+```
+
+**Proxy not responding after `brew upgrade`**
+The proxy service auto-restarts on upgrade, but if it doesn't:
+```bash
+# Check status
+launchctl list | grep jira-mcp
+
+# Manually restart
+launchctl unload ~/Library/LaunchAgents/com.jira-mcp.proxy.plist
+launchctl load ~/Library/LaunchAgents/com.jira-mcp.proxy.plist
+```
+
+**Proxy logs**
+```bash
+# If running as a service
+tail -f ~/Library/Logs/jira-mcp/jira-proxy.err
+
+# Or via make (from source)
+make proxy-logs
+```
+
+**Enable verbose response logging**
+Set `PROXY_LOG_RESPONSES=true` in `.env.local` and restart the proxy. Every
+response body will be logged (up to 4KB). Disable when done debugging.
+
+**Branch names invalid in PhpStorm**
+The proxy sanitizes Jira issue summaries by default, keeping only `A-Za-z0-9`, spaces,
+`_` and `-`. If this causes issues, disable it with `PROXY_SANITIZE_SUMMARIES=false`
+in `.env.local`.
+
+### MCP Server
+
+**MCP tools not working / authentication errors**
+The MCP server reads the same `~/.jira-mcp-cookies.json` file. If cookies are
+expired, visit Jira in Firefox to refresh them. You can also paste cookies
+manually at `http://localhost:9777`.
+
+**"No cookies configured"**
+The cookie file doesn't exist or is empty. Either:
+- Visit Jira in Firefox (extension syncs automatically), or
+- Open `http://localhost:9777` and paste your `JSESSIONID` manually
+
+### General
+
+**Check your configuration**
+```bash
+make check-env
+```
+
+**Check cookie file health**
+```bash
+cat ~/.jira-mcp-cookies.json
+```
+Look at `_updated_at` to see when cookies were last synced, and `_expiry` for
+TTL remaining. If `ttl` shows `"expired"`, visit Jira in Firefox.
+
 ## Uninstalling
 
 ```bash
-make uninstall   # Remove native messaging host manifest
-make clean       # Remove build artifacts
+# From source
+make uninstall        # Remove native messaging host manifest
+make proxy-uninstall  # Remove proxy service
+make clean            # Remove build artifacts
+
+# Homebrew
+brew uninstall jira-mcp-server
+rm -rf /opt/homebrew/etc/jira-mcp-server
+rm ~/Library/LaunchAgents/com.jira-mcp.proxy.plist
 ```
 
 Then remove the extension from Firefox at `about:addons`.
