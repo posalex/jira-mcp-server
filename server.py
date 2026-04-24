@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import threading
+import time
 import webbrowser
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from pathlib import Path
@@ -58,6 +59,8 @@ COOKIE_FILE = Path(os.environ.get(
     "COOKIE_FILE",
     Path.home() / ".jira-mcp-cookies.json"
 ))
+BEARER_TOKEN = os.environ.get("BEARER_TOKEN", "").strip() or None
+CIRCUIT_RECOVERY_SECONDS = float(os.environ.get("CIRCUIT_RECOVERY_SECONDS", "300"))
 
 # ---------------------------------------------------------------------------
 # Cookie store (thread-safe via the GIL for simple reads/writes)
@@ -83,32 +86,78 @@ def get_cookie_header() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Circuit breaker — trips when cookie auth returns 401 so we stop re-probing
+# expired cookies on every call and route straight to BEARER_TOKEN until
+# the recovery timeout elapses (then one request probes cookies again).
+# ---------------------------------------------------------------------------
+
+_cookie_breaker = {"open_until": 0.0}
+
+
+def cookie_breaker_open() -> bool:
+    return time.monotonic() < _cookie_breaker["open_until"]
+
+
+def cookie_breaker_trip():
+    _cookie_breaker["open_until"] = time.monotonic() + CIRCUIT_RECOVERY_SECONDS
+    print(
+        f"[circuit] Cookie auth OPENED for {int(CIRCUIT_RECOVERY_SECONDS)}s — routing via BEARER_TOKEN",
+        file=sys.stderr,
+    )
+
+
+def cookie_breaker_close():
+    if _cookie_breaker["open_until"]:
+        print("[circuit] Cookie auth CLOSED — cookies accepted again", file=sys.stderr)
+    _cookie_breaker["open_until"] = 0.0
+
+
+# ---------------------------------------------------------------------------
 # Jira HTTP helper
 # ---------------------------------------------------------------------------
 
 def jira_request(method: str, path: str, params: dict = None, json_body: dict = None) -> dict:
     cookie_header = get_cookie_header()
-    if not cookie_header:
-        return {"error": "No cookies configured. Open http://localhost:{} to set your JSESSIONID.".format(WEB_PORT)}
+    if not cookie_header and not BEARER_TOKEN:
+        return {"error": "No cookies configured and no BEARER_TOKEN set. Open http://localhost:{} to set your JSESSIONID, or add BEARER_TOKEN to .env.local.".format(WEB_PORT)}
 
     url = f"{JIRA_URL}{path}"
-    headers = {
-        "Cookie": cookie_header,
+    base_headers = {
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    
-    # Add XSRF header to avoid 403 on write operations
-    cookies = load_cookies()
-    xsrf = cookies.get("atlassian.xsrf.token", "")
-    if xsrf:
-        headers["X-Atlassian-Token"] = "no-check"
 
-    with httpx.Client(verify=True, timeout=30) as client:
-        resp = client.request(method, url, headers=headers, params=params, json=json_body)
+    def send(auth_mode: str) -> httpx.Response:
+        headers = dict(base_headers)
+        if auth_mode == "cookie":
+            headers["Cookie"] = cookie_header
+            if load_cookies().get("atlassian.xsrf.token"):
+                headers["X-Atlassian-Token"] = "no-check"
+        else:  # bearer
+            headers["Authorization"] = f"Bearer {BEARER_TOKEN}"
+            headers["X-Atlassian-Token"] = "no-check"
+        with httpx.Client(verify=True, timeout=30) as client:
+            return client.request(method, url, headers=headers, params=params, json=json_body)
+
+    # Circuit breaker: skip cookies while circuit is open and bearer is available
+    if cookie_header and not (cookie_breaker_open() and BEARER_TOKEN):
+        auth_used = "cookie"
+    else:
+        auth_used = "bearer"
+    resp = send(auth_used)
+    # Trip breaker + fail over to bearer on 401 from cookie auth
+    if resp.status_code == 401 and auth_used == "cookie" and BEARER_TOKEN:
+        cookie_breaker_trip()
+        resp = send("bearer")
+        auth_used = "bearer"
+    elif auth_used == "cookie" and resp.status_code < 400:
+        # Half-open probe succeeded — close the circuit
+        cookie_breaker_close()
 
     if resp.status_code == 401:
-        return {"error": "Session expired. Please update your cookie at http://localhost:{}".format(WEB_PORT)}
+        if auth_used == "bearer":
+            return {"error": "BEARER_TOKEN rejected by Jira. Check the token in .env.local."}
+        return {"error": "Session expired. Please update your cookie at http://localhost:{} or set BEARER_TOKEN in .env.local.".format(WEB_PORT)}
     if resp.status_code == 429:
         return {"error": "Rate limited by Jira. Try again later or update cookies."}
     if resp.status_code >= 400:
@@ -116,7 +165,7 @@ def jira_request(method: str, path: str, params: dict = None, json_body: dict = 
             return {"error": resp.json()}
         except Exception:
             return {"error": f"HTTP {resp.status_code}: {resp.text[:500]}"}
-    
+
     if not resp.text.strip():
         return {"ok": True}
     return resp.json()
@@ -255,8 +304,16 @@ class WebHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/api/status":
             cookies = load_cookies()
-            result = {"has_cookies": bool(cookies), "authenticated": False, "cookies": cookies}
-            if cookies:
+            breaker_remaining = max(0.0, _cookie_breaker["open_until"] - time.monotonic())
+            result = {
+                "has_cookies": bool(cookies),
+                "authenticated": False,
+                "cookies": cookies,
+                "has_bearer_token": bool(BEARER_TOKEN),
+                "cookie_circuit_open": breaker_remaining > 0,
+                "cookie_circuit_reset_in_s": round(breaker_remaining, 1),
+            }
+            if cookies or BEARER_TOKEN:
                 data = jira_request("GET", "/rest/api/2/myself")
                 if "displayName" in data or "name" in data:
                     result["authenticated"] = True
