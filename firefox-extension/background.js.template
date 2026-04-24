@@ -36,7 +36,6 @@ async function getCookie(name) {
 async function syncCookies(reason) {
   const now = Date.now();
   if (now - lastSentAt < DEBOUNCE_MS) return;
-  lastSentAt = now;
 
   const sessionCookie = await getCookie(COOKIE_SESSION_NAME);
   const xsrfCookie = await getCookie(COOKIE_XSRF_NAME);
@@ -45,6 +44,10 @@ async function syncCookies(reason) {
     console.log("[Jira Cookie Bridge] No session cookie found — skipping.");
     return;
   }
+
+  // Only bump the debounce once we actually have something to send — otherwise
+  // a no-cookie startup call would swallow the real onChanged that follows.
+  lastSentAt = now;
 
   const cookies = {};
   const expiry = {};
